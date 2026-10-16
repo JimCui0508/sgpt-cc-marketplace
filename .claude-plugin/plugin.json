@@ -1,0 +1,19 @@
+{
+  "name": "sgpt-cc",
+  "version": "1.0.0",
+  "description": "SGPT (Stop-Gate Process Tracing) full stack for Claude Code /goal: independent clause check, receipt chains, C1/C2/C3 channel ladder, and Intervention A helpers. Observability only — not a model improver.",
+  "author": {
+    "name": "Jin Cui"
+  },
+  "keywords": [
+    "sgpt",
+    "goal",
+    "observability",
+    "stop-gate",
+    "claude-code",
+    "receipts",
+    "intervention"
+  ],
+  "homepage": "https://github.com/JimCui0508/sgpt-cc-marketplace",
+  "repository": "https://github.com/JimCui0508/sgpt-cc-marketplace"
+}

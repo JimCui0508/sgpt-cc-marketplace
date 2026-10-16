@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sgpt-cc-marketplace",
+  "description": "Public marketplace for the SGPT Claude Code plugin (Stop-Gate Process Tracing).",
+  "owner": {
+    "name": "Jin Cui"
+  },
+  "plugins": [
+    {
+      "name": "sgpt-cc",
+      "source": "./",
+      "description": "SGPT full observability for Claude Code /goal. Not a model improver.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jin Cui"
+      },
+      "category": "productivity",
+      "keywords": [
+        "sgpt",
+        "goal",
+        "observability",
+        "stop-gate"
+      ]
+    }
+  ]
+}

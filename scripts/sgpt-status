@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# sgpt-status — thin local helper for SGPT MVP
+# Scans STOP.txt, optional debug JSONL, and common Goal markers.
+# Does not replace Claude Code /goal; observability only.
+set -euo pipefail
+
+STOP_FILE="${SGPT_STOP_FILE:-./STOP.txt}"
+DEBUG_FILE="${SGPT_DEBUG_FILE:-}"
+MAX_BYTES="${SGPT_STATUS_MAX_BYTES:-2000000}"
+
+usage() {
+  cat <<'USAGE'
+Usage: sgpt-status [debug-file]
+
+Env:
+  SGPT_DEBUG_FILE   path to --debug-file JSONL (or pass as $1)
+  SGPT_STOP_FILE    path to STOP.txt (default ./STOP.txt)
+  SGPT_STATUS_MAX_BYTES  max bytes to scan per file (default 2e6)
+
+Exit codes: 0 always when scan finishes (missing files are reported, not fatal).
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ -n "${1:-}" ]]; then
+  DEBUG_FILE="$1"
+fi
+
+# Auto-discover debug file if unset
+if [[ -z "$DEBUG_FILE" ]]; then
+  if [[ -n "${CLAUDE_DEBUG_FILE:-}" && -f "${CLAUDE_DEBUG_FILE}" ]]; then
+    DEBUG_FILE="$CLAUDE_DEBUG_FILE"
+  elif [[ -f /tmp/sgpt-debug.jsonl ]]; then
+    DEBUG_FILE=/tmp/sgpt-debug.jsonl
+  elif [[ -L "$HOME/.claude/debug/latest" || -f "$HOME/.claude/debug/latest" ]]; then
+    DEBUG_FILE="$HOME/.claude/debug/latest"
+  fi
+fi
+
+echo "=== SGPT status (observability only) ==="
+echo "cwd: $(pwd)"
+echo "time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo
+
+# --- STOP.txt ---
+echo "--- STOP.txt ($STOP_FILE) ---"
+if [[ -f "$STOP_FILE" ]]; then
+  # shellcheck disable=SC2016
+  python3 - "$STOP_FILE" <<'PY' || head -c 400 "$STOP_FILE"
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+t = p.read_text(errors="replace")
+print(f"exists: yes  bytes={p.stat().st_size}")
+low = t.lower()
+for label, pred in [
+    ("GOAL_NOT_MET", "GOAL_NOT_MET" in t),
+    ("silent_done", "silent_done" in low),
+    ("Goal achieved substr", "Goal achieved" in t),
+]:
+    print(f"  marker {label}: {pred}")
+print("--- first 240 chars ---")
+print(t[:240].replace("\n", "\\n"))
+PY
+else
+  echo "missing (ok if your task does not use STOP.txt)"
+fi
+echo
+
+# --- debug file ---
+echo "--- debug file ---"
+if [[ -z "$DEBUG_FILE" ]]; then
+  echo "none found. Set SGPT_DEBUG_FILE or pass path."
+  echo "Tip: claude --debug-file /tmp/sgpt-debug.jsonl --debug hooks"
+elif [[ ! -f "$DEBUG_FILE" ]]; then
+  echo "configured but missing: $DEBUG_FILE"
+else
+  echo "path: $DEBUG_FILE"
+  python3 - "$DEBUG_FILE" "$MAX_BYTES" <<'PY' || true
+import json, re, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+limit = int(sys.argv[2])
+raw = path.read_bytes()[:limit]
+text = raw.decode("utf-8", errors="replace")
+print(f"bytes_scanned: {len(raw)} (cap={limit})")
+
+goal_set = len(re.findall(r"Goal set:", text))
+achieved = len(re.findall(r"\bGoal achieved\b", text))
+failed = len(re.findall(r"\bGoal failed\b", text))
+active = len(re.findall(r"Goal active:", text))
+no_goal = len(re.findall(r"No goal set", text))
+stop_fb = len(re.findall(r"Stop hook feedback", text))
+print(f"spans: Goal set={goal_set}  Goal achieved={achieved}  Goal failed={failed}")
+print(f"spans: Goal active={active}  No goal set={no_goal}  Stop hook feedback={stop_fb}")
+
+ok_true = ok_false = impossible = 0
+last_verdict = None
+# Line-oriented JSON + loose regex fallback
+for line in text.splitlines():
+    s = line.strip()
+    if not s:
+        continue
+    obj = None
+    if s.startswith("{"):
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError:
+            obj = None
+    if isinstance(obj, dict):
+        # nested or flat Stop-hook style
+        blob = json.dumps(obj, ensure_ascii=False)
+    else:
+        blob = s
+    if re.search(r'"ok"\s*:\s*true', blob):
+        ok_true += 1
+        last_verdict = "ok:true"
+    if re.search(r'"ok"\s*:\s*false', blob):
+        ok_false += 1
+        last_verdict = last_verdict or "ok:false"
+    if re.search(r'"impossible"\s*:\s*true', blob):
+        impossible += 1
+        last_verdict = "impossible:true"
+
+print(f"hook-ish counts: ok:true={ok_true} ok:false={ok_false} impossible:true={impossible}")
+print(f"last_verdict_guess: {last_verdict or 'none'}")
+
+# C3 hint
+if impossible:
+    hint = "C3 signal suggests Impossible clear (confirm with post /goal → No goal set)"
+elif ok_true and not ok_false:
+    hint = "C3 signal suggests Met (ok:true); confirm independent clauses on disk"
+elif ok_false and active:
+    hint = "C3-ish retain: ok:false with Goal active spans"
+elif ok_false:
+    hint = "ok:false seen — check bare /goal for Goal active vs cleared"
+else:
+    hint = "no clear Stop-hook verdict in scanned bytes — enable --debug hooks or raise scan cap"
+print(f"hint: {hint}")
+PY
+fi
+echo
+
+# --- C2 reminder ---
+cat <<'C2'
+--- C2 reminder (manual) ---
+Send bare product slash command in the Claude Code session:
+  /goal
+Then read:
+  Goal active: …  → goal retained
+  No goal set     → cleared (Met OR Impossible; need C3 to split)
+
+--- C3 reminder ---
+claude --debug-file /tmp/sgpt-debug.jsonl --debug hooks
+
+--- Optional paper harvest (repo only) ---
+PYTHONPATH=src python3 -m goal_policy.sgpt_taxonomy
+PYTHONPATH=src python3 -m goal_policy.sgpt_receipts
+C2
+
+# Offer repo harvest summary if present
+REPO=""
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+  REPO="$(git rev-parse --show-toplevel)"
+fi
+if [[ -n "$REPO" && -d "$REPO/src/goal_policy" ]]; then
+  echo
+  echo "--- repo detected: $REPO ---"
+  echo "SGPT modules available under PYTHONPATH=src (not auto-run)."
+fi
+
+echo
+echo "=== done ==="
