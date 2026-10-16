@@ -10,7 +10,7 @@
       "name": "sgpt-cc",
       "source": "./",
       "description": "SGPT full observability for Claude Code /goal. Not a model improver.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Jin Cui"
       },

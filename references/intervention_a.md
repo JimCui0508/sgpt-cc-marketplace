@@ -14,4 +14,4 @@ sgpt intervene doc
 sgpt intervene aggregate   # if product_runs present
 ```
 
-Live re-run: see repo `results/REPRO.md` — expensive; needs Claude Code + proxy.
+Live re-run: see repo `results/REPRO.md` — expensive; needs Claude Code + proxy. `sgpt intervene run` still refuses without `--i-mean-it`. Plugin hooks never call `fake_low` or `intervene`.

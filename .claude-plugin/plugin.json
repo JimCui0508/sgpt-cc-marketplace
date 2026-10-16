@@ -1,7 +1,7 @@
 {
   "name": "sgpt-cc",
-  "version": "1.0.0",
-  "description": "SGPT (Stop-Gate Process Tracing) full stack for Claude Code /goal: independent clause check, receipt chains, C1/C2/C3 channel ladder, and Intervention A helpers. Observability only — not a model improver.",
+  "version": "1.1.0",
+  "description": "SGPT (Stop-Gate Process Tracing) for Claude Code /goal: independent clause check, receipt chains, C1/C2/C3 ladder, Intervention A helpers, and opt-in SessionStart/Stop hooks. Observability only — not a model improver. Does not replace product /goal or --debug-file.",
   "author": {
     "name": "Jin Cui"
   },

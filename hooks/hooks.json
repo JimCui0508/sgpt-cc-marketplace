@@ -1,0 +1,42 @@
+{
+  "description": "SGPT SessionStart/Stop clause checks and an opt-in lab note. Does not send product /goal or run Intervention A.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/sgpt_cli.py", "hook-session"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/sgpt_cli.py", "hook-stop"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/sgpt_cli.py", "hook-prompt"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
